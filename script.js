@@ -97,6 +97,7 @@ const PlannerCore = (() => {
       excludedOccurrences: state.excludedOccurrences.map(e => pick(e,['seriesId','scheduledDate'])),
       settings: { categoryFilter: state.settings.categoryFilter }, meta: { lastAutoTransferPromptWeek: state.meta.lastAutoTransferPromptWeek, backupReminderAfter: state.meta.backupReminderAfter }
     };
+    for (const item of [...result.tasks, ...result.series]) { item.title = item.title.trim(); item.context = item.context.trim(); }
     new Set(result.tasks.map(t => t.date)).forEach(date => normalize(result,date)); return result;
   }
   function decode(raw) { const state = JSON.parse(raw); safeTree(state); return canonical(state); }
@@ -301,6 +302,7 @@ if (typeof document !== 'undefined') (() => {
   const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
   let today = C.dateKey(new Date()), week = C.monday(today), pages = {}, editing = null, baseline = '', opener = null, busy = false, dragged = null;
   let generationBlocked = false, maintenanceRunning = false, deleteId = null, modalOpener = null;
+  let renderedKey = null, repeatInitialized = false;
   let transferWeek = null, transferPage = 0, transferRows = [], transferSelected = new Set();
   const seriesUndoLocks = new Map();
   const pendingUndo = new Set();
@@ -430,7 +432,7 @@ if (typeof document !== 'undefined') (() => {
     menu.append(summary, panel); top.append(menu); node.append(top);
     function changeOrder(direction) { if (transact(s => C.step(s, task.id, direction, filter()))) { reveal(task.id); movedAnnouncement(task.id); } }
     const titleRow = el('div', 'title-row'), check = el('input', 'done-toggle'); check.type = 'checkbox'; check.checked = task.status === 'done'; check.disabled = repository.readonly; check.setAttribute('aria-label', `Готово: ${task.title}`); check.addEventListener('change', () => setStatus(task.id, check.checked ? 'done' : task.previousStatus));
-    const title = button(task.title, () => openEditor(task), 'task-title'); title.disabled = repository.readonly; titleRow.append(check, title); node.append(titleRow);
+    const title = button(task.title, () => openEditor(task), 'task-title'); titleRow.append(check, title); node.append(titleRow);
     if (task.context) node.append(el('p', 'task-context', task.context));
     const bottom = el('div', 'card-bottom'); bottom.append(el('span', `priority ${task.priority}`, `${task.priority === 'high' ? '↑ ' : task.priority === 'low' ? '↓ ' : ''}${C.priorities[task.priority]}`));
     const select = el('select', 'status-select'); select.setAttribute('aria-label', `Статус: ${task.title}`); select.disabled = repository.readonly;
@@ -444,6 +446,11 @@ if (typeof document !== 'undefined') (() => {
   function clearDrag() { dragged = null; clearDrop(); document.body.classList.remove('is-dragging'); document.querySelectorAll('.dragging').forEach(n => n.classList.remove('dragging')); }
   function render() {
     updateDataNotices();
+    const renderKey = JSON.stringify([state(), week, today, pages, repository.readonly, generationBlocked]);
+    if (renderKey === renderedKey) return;
+    const active = document.activeElement, activeCard = active?.closest('.card');
+    const activeId = activeCard?.dataset.id, activeClass = active?.className, activeTag = active?.tagName;
+    const openMenus = new Set(Array.from($('board').querySelectorAll('.card-menu[open]')).map(n => n.closest('.card').dataset.id));
     const current = C.monday(today), sameWeek = week === current;
     $('view-week').textContent = `${sameWeek ? 'Текущая неделя' : 'Просматриваемая неделя'}: ${range(week)}`;
     $('current-week').textContent = sameWeek ? '' : `Текущая неделя: ${range(current)}`; $('current-week').hidden = sameWeek;
@@ -475,6 +482,14 @@ if (typeof document !== 'undefined') (() => {
       section.addEventListener('drop', event => { if (!dragged || repository.readonly || !C.validDate(date)) return; event.preventDefault(); const id = dragged, target = event.target.closest('.card'); clearDrag(); moveTask(id, date, target?.dataset.id || null); });
       $('board').append(section);
     }
+    for (const node of $('board').querySelectorAll('.card')) {
+      if (openMenus.has(node.dataset.id)) node.querySelector('.card-menu').open = true;
+      if (activeId === node.dataset.id) {
+        const target = Array.from(node.querySelectorAll('button,input,select,summary')).find(n => n.tagName === activeTag && n.className === activeClass && n.textContent === active.textContent);
+        (target || node.querySelector('.task-title')).focus({preventScroll:true});
+      }
+    }
+    renderedKey = JSON.stringify([state(), week, today, pages, repository.readonly, generationBlocked]);
   }
   function focusPager(date) { const day = Array.from($('board').children).find(n => n.dataset.date === date); day?.querySelector('.pager button:not(:disabled)')?.focus({ preventScroll: true }); }
   function readForm() { return { title: $('task-title').value, context: $('task-context').value, date: $('task-date').value, category: $('task-category').value, priority: $('task-priority').value, status: $('task-status').value, repeat: $('repeat-enabled').checked, weekdays: Array.from(document.querySelectorAll('.weekdays input:checked')).map(n => Number(n.value)), endDate: $('repeat-end').value || null, scope: $('edit-scope').value }; }
@@ -493,12 +508,17 @@ if (typeof document !== 'undefined') (() => {
     $('repeat-preview').textContent = linked && !future ? 'Расписание доступно в режиме «Эту и будущие».' : first ? `Первое повторение: ${fullDate(first)}` : 'Выберите дни и подходящий интервал повторения.';
   }
   function openEditor(task = null, copy = false, date = null) {
-    if (repository.readonly) return;
+    if (repository.readonly && (!task || copy)) return;
+    $('task-form').querySelectorAll('input,textarea,select').forEach(n => { n.disabled = false; });
+    $('save-task').hidden = repository.readonly;
+    $('cancel-editor').textContent = repository.readonly ? 'Закрыть' : 'Отмена';
     opener = document.activeElement; editing = task && !copy ? task.id : null;
     const data = task ? { ...task, status: copy ? 'todo' : task.status } : { title: '', context: '', date: date || (week === C.monday(today) ? today : week), category: 'work', priority: 'medium', status: 'todo' };
-    $('editor-title').textContent = editing ? 'Редактировать задачу' : copy ? 'Копия задачи' : 'Новая задача';
+    $('editor-title').textContent = repository.readonly ? 'Просмотр задачи' : editing ? 'Редактировать задачу' : copy ? 'Копия задачи' : 'Новая задача';
     for (const key of ['title', 'context', 'date', 'category', 'priority', 'status']) $(`task-${key}`).value = data[key];
     const linked = task?.seriesId && !copy, series = linked ? state().series.find(s => s.id === task.seriesId) : null;
+    repeatInitialized = !!linked;
+    clearRepeatErrors();
     $('scope-field').hidden = !linked; $('edit-scope').value = 'one'; $('repeat-enabled').checked = !!linked; $('repeat-end').value = series?.endDate || '';
     document.querySelectorAll('.weekdays input').forEach(n => { n.checked = (series?.weekdays || [C.weekday(data.date)]).includes(Number(n.value)); });
     $('series-confirm').hidden = true; updateRepeatUI();
@@ -506,7 +526,8 @@ if (typeof document !== 'undefined') (() => {
     $('form-error').hidden = true; $('discard-prompt').hidden = true; $('save-task').disabled = false;
     $('history-list').replaceChildren(); $('history').hidden = !editing || !task.moveHistory.length; $('history').open = false;
     if (editing) task.moveHistory.forEach(move => $('history-list').append(el('li', '', `${fullDate(move.fromDate)} → ${fullDate(move.toDate)} · ${new Date(move.at).toLocaleString('ru-RU')}`)));
-    baseline = JSON.stringify(readForm()); $('editor').showModal(); $('task-title').focus();
+    if (repository.readonly) $('task-form').querySelectorAll('input,textarea,select').forEach(n => { n.disabled = true; });
+    baseline = JSON.stringify(readForm()); $('editor').showModal(); (repository.readonly ? $('cancel-editor') : $('task-title')).focus();
   }
   function closeEditor() { $('editor').close(); editing = null; if (opener?.isConnected) opener.focus(); else $('add-task').focus({ preventScroll: true }); afterDialog(); }
   function askClose() { if (JSON.stringify(readForm()) === baseline) closeEditor(); else { $('discard-prompt').hidden = false; $('keep-editing').focus(); } }
@@ -527,6 +548,10 @@ if (typeof document !== 'undefined') (() => {
   $('task-form').addEventListener('input', () => { $('series-confirm').hidden = true; });
   $('repeat-enabled').addEventListener('change', () => {
     const task = editTask(); if (task && !task.seriesId && $('repeat-enabled').checked) $('task-date').value = task.date;
+    if ($('repeat-enabled').checked && !repeatInitialized && C.validDate($('task-date').value)) {
+      document.querySelectorAll('.weekdays input').forEach(n => { n.checked = Number(n.value) === C.weekday($('task-date').value); });
+      repeatInitialized = true;
+    }
     if (!$('repeat-enabled').checked && !task?.seriesId) $('task-status').value = task?.status || 'todo';
     updateRepeatUI();
   });
@@ -540,8 +565,12 @@ if (typeof document !== 'undefined') (() => {
     $('repeat-enabled').checked = true; $('repeat-end').value = series.endDate || '';
     document.querySelectorAll('.weekdays input').forEach(n => { n.checked = series.weekdays.includes(Number(n.value)); }); updateRepeatUI(); $('series-confirm').hidden = true;
   });
+  function clearRepeatErrors() {
+    for (const id of ['weekdays','repeat-end']) { $(id + '-error').hidden = true; $(id).removeAttribute('aria-invalid'); }
+  }
   function saveEditor(confirmed) {
-    if (busy || !$('editor').open) return;
+    if (busy || repository.readonly || !$('editor').open) return;
+    clearRepeatErrors();
     const input = readForm(), result = C.fields(input); $('form-error').hidden = true;
     for (const key of ['title', 'context', 'date']) { const error = result.errors[key]; $(`${key}-error`).textContent = error || ''; $(`${key}-error`).hidden = !error; $(`task-${key}`).setAttribute('aria-invalid', String(!!error)); }
     if (Object.keys(result.errors).length) { const key = Object.keys(result.errors)[0]; if (key === 'form') { $('form-error').textContent = result.errors.form; $('form-error').hidden = false; } else $(`task-${key}`).focus(); announce('Проверьте заполнение полей.'); return; }
@@ -549,7 +578,14 @@ if (typeof document !== 'undefined') (() => {
     try {
       if (future && locked(oldTask.seriesId)) throw Error('Сначала отмените удаление или дождитесь окончания срока отмены.');
       if (seriesCreation || (future && input.repeat)) C.seriesFields(seriesInput(input));
-    } catch (error) { $('form-error').textContent = error.message; $('form-error').hidden = false; return; }
+    } catch (error) {
+      if ((seriesCreation || (future && input.repeat)) && !(future && locked(oldTask.seriesId))) {
+        const id = input.weekdays.length ? 'repeat-end' : 'weekdays';
+        $(id + '-error').textContent = error.message; $(id + '-error').hidden = false; $(id).setAttribute('aria-invalid','true');
+        (id === 'weekdays' ? $('weekdays').querySelector('input') : $(id)).focus();
+      } else { $('form-error').textContent = error.message; $('form-error').hidden = false; }
+      return;
+    }
     if (!confirmed && (future || (seriesCreation && oldTask))) {
       $('series-confirm-text').textContent = future ? input.repeat ? `Выбранное и будущие повторения будут созданы заново. Их отдельные изменения, переносы и статусы, включая «Готово», будут сброшены. Заменяемых экземпляров: ${C.futureTasks(state(), oldTask).length}.` : `Будущие повторения будут удалены (${C.futureTasks(state(), oldTask).length - 1}), а выбранная задача станет самостоятельной с прежней датой и статусом.` : 'Задача будет заменена серией; новые повторения начнутся со статуса «Не начато».';
       $('series-confirm').hidden = false; $('apply-series').focus(); return;

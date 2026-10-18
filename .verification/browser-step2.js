@@ -11,8 +11,8 @@ async (hostPage) => {
     await page.clock.install({time:new Date('2026-10-19T09:00:00.000Z')});await page.goto(url);
     await page.locator('#add-task').click();await page.locator('#task-title').fill('Планёрка');await page.locator('#repeat-enabled').check();
     check(await page.locator('#task-status').isDisabled()&&await page.locator('#task-status').inputValue()==='todo','новая серия начинается с Не начато');
-    await setDays([]);await page.locator('#save-task').click();check(await page.locator('#form-error').isVisible(),'пустой набор дней отклонён');
-    await setDays([1,4]);await page.locator('#repeat-end').fill('2026-10-18');await page.locator('#save-task').click();check(await page.locator('#form-error').isVisible(),'окончание раньше начала отклонено');
+    await setDays([]);await page.locator('#save-task').click();check(await page.locator('#weekdays-error').isVisible(),'пустой набор дней отклонён');
+    await setDays([1,4]);await page.locator('#repeat-end').fill('2026-10-18');await page.locator('#save-task').click();check(await page.locator('#repeat-end-error').isVisible(),'окончание раньше начала отклонено');
     await page.locator('#repeat-end').fill('2026-10-29');await page.locator('#save-task').click();
     check((await data()).series.length===1&&(await data()).tasks.length===2,'UC-16: серия по понедельникам и четвергам');
     check(await page.locator('.repeat-icon').count()===2,'значки повторений на карточках');

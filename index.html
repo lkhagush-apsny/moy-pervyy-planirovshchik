@@ -53,8 +53,8 @@
         <div class="repeat-section">
           <label class="check-label" for="repeat-enabled"><input type="checkbox" id="repeat-enabled"> Повторять по дням недели</label>
           <div id="repeat-options" hidden>
-            <fieldset class="weekdays"><legend>Дни повторения</legend><label><input type="checkbox" value="1">Пн</label><label><input type="checkbox" value="2">Вт</label><label><input type="checkbox" value="3">Ср</label><label><input type="checkbox" value="4">Чт</label><label><input type="checkbox" value="5">Пт</label><label><input type="checkbox" value="6">Сб</label><label><input type="checkbox" value="7">Вс</label></fieldset>
-            <label for="repeat-end">Окончание серии <span class="optional">необязательно</span></label><input id="repeat-end" type="date" min="1900-01-01" max="2100-12-31">
+            <fieldset id="weekdays" class="weekdays" aria-describedby="weekdays-error"><legend>Дни повторения</legend><label><input type="checkbox" value="1">Пн</label><label><input type="checkbox" value="2">Вт</label><label><input type="checkbox" value="3">Ср</label><label><input type="checkbox" value="4">Чт</label><label><input type="checkbox" value="5">Пт</label><label><input type="checkbox" value="6">Сб</label><label><input type="checkbox" value="7">Вс</label></fieldset><p id="weekdays-error" class="field-error" role="alert" hidden></p>
+            <label for="repeat-end">Окончание серии <span class="optional">необязательно</span></label><input id="repeat-end" type="date" min="1900-01-01" max="2100-12-31" aria-describedby="repeat-end-error"><p id="repeat-end-error" class="field-error" role="alert" hidden></p>
             <p id="repeat-preview" class="help-text"></p>
           </div>
           <p id="repeat-note" class="help-text" hidden>Каждое новое повторение начинается со статуса «Не начато».</p>

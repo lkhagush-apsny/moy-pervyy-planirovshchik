@@ -1,0 +1,4 @@
+# Temporary browser automation output and isolated test profiles
+.playwright-mcp/
+.verification/profiles/
+.verification/*-failure.png

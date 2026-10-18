@@ -1,0 +1,37 @@
+{
+  "format": "my-week-planner",
+  "exportedAt": "2026-10-19T09:00:00.622Z",
+  "data": {
+    "schemaVersion": 1,
+    "revision": 2,
+    "tasks": [
+      {
+        "id": "2d245dc9f15a083a81d68be16029157e",
+        "title": "Рабочая задача",
+        "context": "",
+        "date": "2026-10-19",
+        "originalDate": "2026-10-19",
+        "category": "work",
+        "priority": "medium",
+        "status": "todo",
+        "previousStatus": "todo",
+        "completedAt": null,
+        "order": 0,
+        "seriesId": null,
+        "scheduledDate": null,
+        "createdAt": "2026-10-19T09:00:00.392Z",
+        "updatedAt": "2026-10-19T09:00:00.392Z",
+        "moveHistory": []
+      }
+    ],
+    "series": [],
+    "excludedOccurrences": [],
+    "settings": {
+      "categoryFilter": "all"
+    },
+    "meta": {
+      "lastAutoTransferPromptWeek": null,
+      "backupReminderAfter": "2026-10-20T09:00:00.540Z"
+    }
+  }
+}

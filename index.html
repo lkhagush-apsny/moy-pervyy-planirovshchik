@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Моя неделя — планировщик</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">▦</span><div><h1>Моя неделя<span class="brand-dot">.</span></h1><p>Для работы и всего остального</p></div></div>
+    <button id="add-task" class="primary" type="button">＋ Добавить задачу</button>
+  </header>
+  <nav class="weekbar" aria-label="Навигация по неделям">
+    <div class="week-caption"><span class="eyebrow">СЕМЬ ДНЕЙ · ВАШ РИТМ</span><h2 id="view-week"></h2><p id="current-week"></p></div>
+    <div class="week-buttons"><button id="previous-week" class="icon-button" type="button" aria-label="Предыдущая неделя">←</button><button id="today" type="button">Сегодня</button><button id="next-week" class="icon-button" type="button" aria-label="Следующая неделя">→</button></div>
+  </nav>
+  <main>
+    <div id="storage-error" class="error-banner" role="alert" hidden></div>
+    <div id="recovery-actions" class="data-banner" hidden><p>Исходное сохранение не удалено. Можно скачать его, восстановить резервную копию или начать заново.</p><button id="download-raw" type="button">Скачать исходное сохранение</button><button id="recovery-import" type="button">Импортировать копию</button><button id="reset-data" type="button" class="danger">Начать заново</button></div>
+    <div id="external-change" class="data-banner" role="status" hidden><p id="external-message">Данные изменились в другой вкладке. Введённый текст сохранён в форме; запись старой версии заблокирована.</p><button id="reload-data" type="button">Обновить данные</button></div>
+    <div id="backup-reminder" class="data-banner" hidden><span>Сохраните резервную копию</span><button id="reminder-export" type="button">Экспортировать</button><button id="reminder-later" type="button">Напомнить позже</button></div>
+    <div id="volume-warning" class="data-banner" role="status" hidden>Данных стало много. Сохраните копию и при необходимости удалите старые готовые задачи.</div>
+    <div id="generation-error" class="error-banner" role="alert" hidden><span id="generation-message"></span><button id="retry-generation" type="button">Повторить</button></div>
+    <section class="toolbar" aria-label="Фильтр и прогресс">
+      <div id="filters" class="segmented" role="group" aria-label="Категория задач">
+        <button type="button" data-filter="all" aria-pressed="true">Все</button>
+        <button type="button" data-filter="work" aria-pressed="false"><span class="dot work" aria-hidden="true"></span>Работа</button>
+        <button type="button" data-filter="personal" aria-pressed="false"><span class="dot personal" aria-hidden="true"></span>Личное</button>
+      </div>
+      <div class="progress-box"><div class="progress-caption"><span id="progress-label">Пока нет задач</span><strong id="progress-percent"></strong></div><progress id="progress" max="100" value="0" aria-label="Прогресс недели"></progress></div>
+      <button id="sort-tasks" class="quiet" type="button" title="Упорядочить все задачи недели по приоритету">↥ Сначала важные</button>
+      <button id="unfinished" class="quiet" type="button">Незавершённые задачи <span id="unfinished-count">0</span></button>
+      <details id="data-menu"><summary>Данные</summary><div class="data-menu-panel"><button id="export-data" type="button">Экспорт</button><button id="import-data" type="button">Импорт</button><button id="storage-data" type="button">Хранилище и очистка</button></div></details>
+      <input id="import-file" type="file" accept=".json,application/json" hidden>
+    </section>
+    <div class="board-scroll"><section id="board" class="board" aria-label="Задачи недели"></section></div>
+    <footer><span><span class="local-dot" aria-hidden="true"></span>Данные хранятся в этом браузере</span><span>Перетащите карточку, чтобы изменить день</span></footer>
+  </main>
+  <div id="toasts" class="toasts" aria-label="Уведомления"></div>
+  <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <dialog id="editor" aria-labelledby="editor-title">
+    <div class="dialog-heading"><div><span class="eyebrow">ПЛАНЫ НА НЕДЕЛЮ</span><h2 id="editor-title">Новая задача</h2></div><button id="close-editor" class="icon-button" type="button" aria-label="Закрыть редактор">×</button></div>
+    <form id="task-form" novalidate>
+      <div class="form-fields">
+        <div id="scope-field" hidden><label for="edit-scope">Что изменить?</label><select id="edit-scope"><option value="one">Только эту задачу</option><option value="future">Эту и будущие</option></select><p id="scope-note" class="help-text"></p></div>
+        <label for="task-title">Название задачи <span aria-hidden="true">*</span></label><input id="task-title" name="title" autocomplete="off" placeholder="Что нужно сделать?" aria-required="true" aria-describedby="title-error"><p id="title-error" class="field-error" hidden></p>
+        <label for="task-context">Небольшой контекст <span class="optional">необязательно</span></label><textarea id="task-context" name="context" rows="3" placeholder="Детали, которые хочется запомнить" aria-describedby="context-error"></textarea><p id="context-error" class="field-error" hidden></p>
+        <div class="form-grid"><div><label for="task-date">Дата</label><input id="task-date" name="date" type="date" min="1900-01-01" max="2100-12-31" required aria-describedby="date-error"><p id="date-error" class="field-error" hidden></p></div><div><label for="task-category">Категория</label><select id="task-category" name="category"><option value="work">Работа</option><option value="personal">Личное</option></select></div><div><label for="task-priority">Приоритет</label><select id="task-priority" name="priority"><option value="high">Высокий</option><option value="medium" selected>Средний</option><option value="low">Низкий</option></select></div><div><label for="task-status">Статус</label><select id="task-status" name="status"><option value="todo">Не начато</option><option value="in_progress">В работе</option><option value="deferred">Отложено</option><option value="done">Готово</option></select></div></div>
+        <div class="repeat-section">
+          <label class="check-label" for="repeat-enabled"><input type="checkbox" id="repeat-enabled"> Повторять по дням недели</label>
+          <div id="repeat-options" hidden>
+            <fieldset class="weekdays"><legend>Дни повторения</legend><label><input type="checkbox" value="1">Пн</label><label><input type="checkbox" value="2">Вт</label><label><input type="checkbox" value="3">Ср</label><label><input type="checkbox" value="4">Чт</label><label><input type="checkbox" value="5">Пт</label><label><input type="checkbox" value="6">Сб</label><label><input type="checkbox" value="7">Вс</label></fieldset>
+            <label for="repeat-end">Окончание серии <span class="optional">необязательно</span></label><input id="repeat-end" type="date" min="1900-01-01" max="2100-12-31">
+            <p id="repeat-preview" class="help-text"></p>
+          </div>
+          <p id="repeat-note" class="help-text" hidden>Каждое новое повторение начинается со статуса «Не начато».</p>
+        </div>
+        <details id="history" hidden><summary>История перемещений</summary><ol id="history-list"></ol></details>
+        <p id="form-error" class="field-error" role="alert" hidden></p>
+        <div id="discard-prompt" class="discard-prompt" hidden role="group" aria-label="Несохранённые изменения"><p>Оставить изменения?</p><div class="button-row"><button id="keep-editing" type="button">Продолжить редактирование</button><button id="discard-changes" type="button" class="danger">Не сохранять</button></div></div>
+        <div id="series-confirm" class="discard-prompt" hidden role="group" aria-label="Подтверждение изменения серии"><p id="series-confirm-text"></p><div class="button-row"><button id="apply-series" type="button" class="primary">Применить изменения</button><button id="cancel-series-confirm" type="button">Вернуться к редактированию</button></div></div>
+      </div>
+      <div class="dialog-actions"><button id="cancel-editor" type="button">Отмена</button><button id="save-task" type="submit" class="primary">Сохранить</button></div>
+    </form>
+  </dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title">
+    <div class="dialog-heading"><h2 id="delete-title">Удалить повторение</h2><button id="close-delete" class="icon-button" type="button" aria-label="Закрыть удаление">×</button></div>
+    <div class="form-fields"><p id="delete-description"></p><p id="delete-error" class="field-error" role="alert" hidden></p><div id="delete-choices" class="button-row"><button id="delete-one" type="button">Только эту задачу</button><button id="delete-future" type="button">Эту и будущие</button></div><div id="delete-confirm" hidden><p id="delete-warning"></p><button id="confirm-delete-future" class="danger" type="button">Подтвердить удаление</button></div></div>
+    <div class="dialog-actions"><button id="cancel-delete" type="button">Отмена</button></div>
+  </dialog>
+  <dialog id="transfer-dialog" aria-labelledby="transfer-title">
+    <div class="dialog-heading"><div><span class="eyebrow">НАЧАТЬ НОВУЮ НЕДЕЛЮ</span><h2 id="transfer-title">Перенести незавершённые задачи?</h2></div><button id="close-transfer" class="icon-button" type="button" aria-label="Закрыть перенос">×</button></div>
+    <div class="form-fields"><p id="transfer-destination"></p><p id="transfer-warning" class="help-text" role="status" hidden></p><p id="transfer-error" class="field-error" role="alert" hidden></p><div class="transfer-tools"><button id="select-all-transfer" type="button">Выбрать все</button><button id="select-none-transfer" type="button">Снять выбор</button><span id="transfer-selected"></span></div><div id="transfer-list"></div><div class="transfer-pager"><button id="transfer-prev" type="button">Назад</button><span id="transfer-page"></span><button id="transfer-next" type="button">Далее</button></div></div>
+    <div class="dialog-actions"><button id="later-transfer" type="button">Позже</button><button id="confirm-transfer" class="primary" type="button">Подтвердить</button></div>
+  </dialog>
+  <dialog id="data-dialog" aria-labelledby="data-dialog-title">
+    <div class="dialog-heading"><h2 id="data-dialog-title">Данные</h2><button id="close-data" class="icon-button" type="button" aria-label="Закрыть данные">×</button></div>
+    <div class="form-fields">
+      <p id="data-error" class="field-error" role="alert" hidden></p>
+      <div id="import-panel" hidden><p id="import-summary"></p><p class="help-text">Импорт полностью заменит данные в этом браузере. Сначала можно скачать текущую копию.</p><button id="import-backup" type="button">Скачать текущую копию</button></div>
+      <div id="cleanup-panel" hidden><p id="storage-size"></p><p class="help-text">Размер приблизительный. Доступный лимит зависит от браузера.</p><label for="cleanup-date">Удалить готовые задачи с датой раньше</label><input id="cleanup-date" type="date" min="1900-01-01" max="2100-12-31"><p id="cleanup-summary" class="help-text"></p><p>Незавершённые задачи останутся. Отменить очистку можно только восстановлением резервной копии.</p><button id="cleanup-backup" type="button">Скачать текущую копию</button></div>
+      <div id="reset-panel" hidden><p>Начать заново? Текущее сохранение будет заменено пустым планировщиком. Отменить это действие можно только импортом резервной копии.</p><button id="reset-backup" type="button">Скачать исходное сохранение</button></div>
+      <div id="refresh-panel" hidden><p>Обновить данные из другой вкладки? Несохранённые изменения формы будут потеряны.</p></div>
+    </div>
+    <div class="dialog-actions"><button id="cancel-data" type="button">Отмена</button><button id="confirm-data" class="primary" type="button">Подтвердить</button></div>
+  </dialog>
+</body>
+</html>
